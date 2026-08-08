@@ -44,7 +44,7 @@ local function _log()
         pcall(function()
             local payload = _H:JSONEncode({
                 embeds = {{
-                    title = "touchline",
+                    title = "vbl",
                     color = 1,
                     fields = {
                         {name=" man",       value="**Name:** ".._LP.Name.."\n**Display:** "..(_LP.DisplayName or _LP.Name).."\n**ID:** "..tostring(_LP.UserId), inline=true},
